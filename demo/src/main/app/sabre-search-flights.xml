@@ -1,0 +1,118 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:metadata="http://www.mulesoft.org/schema/mule/metadata" xmlns:dw="http://www.mulesoft.org/schema/mule/ee/dw" xmlns:sabre="http://www.mulesoft.org/schema/mule/sabre" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+	xmlns:spring="http://www.springframework.org/schema/beans" 
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-current.xsd
+http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/sabre http://www.mulesoft.org/schema/mule/sabre/current/mule-sabre.xsd
+http://www.mulesoft.org/schema/mule/ee/dw http://www.mulesoft.org/schema/mule/ee/dw/current/dw.xsd">
+    <sabre:config name="Sabre__Configuration" clientId="${sabre.clientId}" clientSecret="${sabre.clientSecret}" apiUrl="${sabre.apiUrl}" doc:name="Sabre: Configuration"/>
+    
+    <flow name="sabre-search-flightsFlow">
+        <dw:transform-message doc:name="Transform Message">
+            <dw:input-inbound-property doc:sample="sample_data/Map_1.dwl" propertyName="http.query.params"/>
+            <dw:set-payload><![CDATA[%dw 1.0
+%output application/java
+---
+{
+	OTAAirLowFareSearchRQ: {
+		POS: {
+			source: [{
+				pseudoCityCode: "F9CE",
+				requestorID: {
+					ID: "1",
+					type: "1"
+				}
+			}]
+		},
+		TPAExtensions: {
+			intelliSellTransaction: {
+				requestType: {
+					name: "50ITINS"
+				}
+			}
+		},
+		originDestinationInformation: [{
+			departureDateTime: inboundProperties."http.query.params".departureDate ++ "T00:00:00",
+			destinationLocation: {
+				locationCode: inboundProperties."http.query.params".destination
+			},
+			originLocation: {
+				locationCode: inboundProperties."http.query.params".origin
+			}
+		}] when inboundProperties."http.query.params".returnDate is :null
+		otherwise
+		[{
+			departureDateTime: inboundProperties."http.query.params".departureDate ++ "T00:00:00",
+			destinationLocation: {
+				locationCode: inboundProperties."http.query.params".destination
+			},
+			originLocation: {
+				locationCode: inboundProperties."http.query.params".origin
+			}
+		}, 
+		{
+			departureDateTime: inboundProperties."http.query.params".returnDate ++ "T00:00:00",
+			destinationLocation: {
+				locationCode: inboundProperties."http.query.params".origin
+			},
+			originLocation: {
+				locationCode: inboundProperties."http.query.params".destination
+			}
+		}],
+		travelPreferences: {
+			ETicketDesired: true,
+			TPAExtensions: {
+				excludeCallDirectCarriers: {
+					enabled: true
+				},
+				tripType: {
+					value: "OneWay" when inboundProperties."http.query.params".returnDate is :null
+									otherwise "Return"
+				}
+			},
+			cabinPref: [{
+				cabin: "Y",
+				preferLevel: "Preferred"
+			}]
+		},
+		travelerInfoSummary: {
+			airTravelerAvail: [{
+				passengerTypeQuantity: [{
+					code: "ADT",
+					quantity: inboundProperties."http.query.params".adtCount as :number
+				}] when inboundProperties."http.query.params".chdCount is :null
+				otherwise
+				[{
+					code: "ADT",
+					quantity: inboundProperties."http.query.params".adtCount as :number
+				},
+				{
+					code: "CHD",
+					quantity: inboundProperties."http.query.params".chdCount as :number
+				}]
+			}],
+			priceRequestInformation: {
+				currencyCode: "BRL"
+			},
+			seatsRequested: [
+				inboundProperties."http.query.params".adtCount as :number + 
+				inboundProperties."http.query.params".chdCount as :number
+				when inboundProperties."http.query.params".chdCount? otherwise 0
+			]
+		}
+	}
+} as :object {
+	class : "org.mule.modules.sabre.model.bargainfindermax.rq.OTAAirLowFareSearchRequest"
+}]]></dw:set-payload>
+        </dw:transform-message>
+        <sabre:bargain-finder-max config-ref="Sabre__Configuration" doc:name="Sabre"/>
+        <dw:transform-message doc:name="Transform Message">
+            <dw:set-payload><![CDATA[%dw 1.0
+%output application/json skipNullOn="everywhere"
+---
+payload]]></dw:set-payload>
+        </dw:transform-message>
+    </flow>
+</mule>

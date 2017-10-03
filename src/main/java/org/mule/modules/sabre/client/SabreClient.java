@@ -26,6 +26,9 @@ import org.glassfish.jersey.message.GZipEncoder;
 import org.mule.api.ConnectionException;
 import org.mule.api.ConnectionExceptionCode;
 import org.mule.modules.sabre.exception.SabreException;
+import org.mule.modules.sabre.exception.SabreInvalidInputException;
+import org.mule.modules.sabre.exception.SabreNotFoundException;
+import org.mule.modules.sabre.exception.SabreSessionExpiredException;
 import org.mule.modules.sabre.model.authentication.AuthentcationResponse;
 import org.mule.modules.sabre.model.authentication.AuthenticationResponseError;
 import org.mule.modules.sabre.model.generic.GenericErrorResponse;
@@ -99,13 +102,19 @@ public class SabreClient {
      * 
      * @param<T> entity
      *               instance Java type.
-     *               
+     * 
      * @param responseType
      *            The class to be used to convert the response
      * 
      * @return The response entity returned by the API
      * 
-     * @throws SabreException
+     * @throws SabreSessionExpiredException
+     *             When the session is expired
+     * 
+     * @throws SabreNotFoundException
+     *             When request did not return any results
+     * 
+     * @throws SabreInvalidInputException
      *             When the request fails or have invalid input
      */
     public <T> T doRequest(final String path, final Map<String, Object> params, final Object request, Class<T> responseType) throws SabreException {
@@ -135,11 +144,17 @@ public class SabreClient {
                 logger.error("Error invoking path: " + path + " - " + String.valueOf(response.getStatus()));
                 GenericErrorResponse genericErrorResponse = response.readEntity(GenericErrorResponse.class);
                 String messageError = getMessageError(genericErrorResponse);
-                throw new SabreException(messageError);
+                if (response.getStatus() == 401) {
+                    throw new SabreSessionExpiredException(messageError);
+                } else if (response.getStatus() == 404) {
+                    throw new SabreNotFoundException(messageError);
+                } else {
+                    throw new SabreInvalidInputException(messageError);
+                }
             }
         } catch (ProcessingException | IOException e) {
             logger.error("Error invoking path: " + path, e);
-            throw new SabreException(e);
+            throw new SabreInvalidInputException(e);
         }
 
         return responseValue;

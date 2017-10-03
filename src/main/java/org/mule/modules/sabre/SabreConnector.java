@@ -12,10 +12,12 @@ import org.mule.api.annotations.Config;
 import org.mule.api.annotations.Connector;
 import org.mule.api.annotations.Mime;
 import org.mule.api.annotations.Processor;
+import org.mule.api.annotations.ReconnectOn;
 import org.mule.api.annotations.param.Default;
 import org.mule.modules.sabre.client.SabreClient;
 import org.mule.modules.sabre.config.SabreConfig;
 import org.mule.modules.sabre.exception.SabreException;
+import org.mule.modules.sabre.exception.SabreSessionExpiredException;
 import org.mule.modules.sabre.model.bargainfindermax.rq.OTAAirLowFareSearchRequest;
 import org.mule.modules.sabre.model.bargainfindermax.rs.OTAAirLowFareSearchResponse;
 
@@ -56,6 +58,7 @@ public class SabreConnector {
      *             If any fail occurs
      */
     @Processor(friendlyName = "BargainFinderMax")
+    @ReconnectOn(exceptions = { SabreSessionExpiredException.class } )
     @Mime("application/java")
     public OTAAirLowFareSearchResponse bargainFinderMax(@Default("#[payload]") OTAAirLowFareSearchRequest bargainFinderMaxRequest) throws SabreException {
         Map<String, Object> params = new HashMap<String, Object>();
